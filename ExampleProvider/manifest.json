@@ -1,0 +1,9 @@
+{
+  "name": "Liveball",
+  "description": "Прямі трансляції матчів Liveball",
+  "authors": ["vitalymv"],
+  "version": 1,
+  "tvTypes": ["Live"],
+  "language": "uk",
+  "iconUrl": "https://liveball.sx/favicon.ico"
+}
