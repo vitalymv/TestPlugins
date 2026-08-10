@@ -7,27 +7,14 @@ dependencies {
 version = 1
 
 cloudstream {
-    // All of these properties are optional, you can safely remove any of them.
-
-    description = "Lorem ipsum"
-    authors = listOf("Cloudburst", "Luna712")
-
-    /**
-    * Status int as one of the following:
-    * 0: Down
-    * 1: Ok
-    * 2: Slow
-    * 3: Beta-only
-    **/
-    status = 1 // Will be 3 if unspecified
-
-    tvTypes = listOf("Movie")
-
-    requiresResources = true
-    language = "en"
-
-    // Random CC logo I found
-    iconUrl = "https://upload.wikimedia.org/wikipedia/commons/2/2f/Korduene_Logo.png"
+    // Вказуємо назву, яку буде бачити CloudStream
+    name = "Liveball"
+    description = "Прямі трансляції футболу"
+    authors = listOf("vitalymv")
+    language = "uk"
+    
+    // Змінюємо версію на 2, щоб додаток побачив оновлення
+    version = 2
 }
 
 android {
