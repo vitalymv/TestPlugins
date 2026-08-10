@@ -1,0 +1,17 @@
+[
+    {
+        "fileHash": "sha256-2a4ac993bb035b68cc1ac9cabfa6f88b98a62762f5ef9c5fc018dc1785e29299",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/vitalymv/TestPlugins",
+        "fileSize": 9258,
+        "status": 3,
+        "language": "uk",
+        "authors": [
+            
+        ],
+        "version": 5,
+        "internalName": "ExampleProvider",
+        "url": "https://raw.githubusercontent.com/vitalymv/TestPlugins/builds/ExampleProvider.cs3",
+        "name": "ExampleProvider"
+    }
+]
