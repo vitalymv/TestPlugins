@@ -4,6 +4,7 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
 
+@CloudstreamPlugin
 class LiveballProvider : MainAPI() {
     override var mainUrl = "https://liveball.sx"
     override var name = "Liveball"
@@ -36,7 +37,6 @@ class LiveballProvider : MainAPI() {
         val document = app.get(url).document
         val title = document.select("h1").text().ifEmpty { "Матч Liveball" }
 
-        // Передаємо лише name, url, dataUrl та блок налаштування
         return newLiveStreamLoadResponse(title, url, url) {
             this.plot = "Пряма трансляція події з Liveball"
         }
@@ -85,7 +85,7 @@ class LiveballProvider : MainAPI() {
                     return true
                 }
             } catch (e: Exception) {
-                // Ігноруємо помилки мережі/парсингу
+                // Ігноруємо помилки
             }
         }
         return false
