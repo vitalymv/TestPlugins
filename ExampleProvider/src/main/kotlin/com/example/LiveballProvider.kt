@@ -60,17 +60,20 @@ class LiveballProvider : MainAPI() {
         val mainDocument = mainResponse.document
         val mainHtml = mainResponse.text
 
-        // Універсальна регулярка для m3u8
-        val universalM3u8Regex = """https?://[^\s"'<>]+?\.m3u8(?:\?[^\s"'<>]*)?""".toRegex()
+        // Універсальні регулярки для m3u8 та JS-змінних плеєра (file: "...", source: "...")
+        val m3u8Regex = """https?://[^\s"'<>]+?\.m3u8(?:\?[^\s"'<>]*)?""".toRegex()
+        val fileJsRegex = """(?:file|source)\s*:\s*["']([^"']+\.m3u8[^"']*)["']""".toRegex()
 
-        // 1. Пошук прямо у коді сторінки матчу
-        val directMatch = universalM3u8Regex.find(mainHtml)
+        // 1. Шукаємо прямо у коді сторінки матчу
+        val directMatch = m3u8Regex.find(mainHtml)?.value 
+            ?: fileJsRegex.find(mainHtml)?.groupValues?.get(1)
+
         if (directMatch != null) {
-            addLink(directMatch.value, callback)
+            addLink(directMatch, callback)
             return true
         }
 
-        // 2. Пошук у всіх iframe
+        // 2. Пошук усередині iframe (підтримка вкладених плеєрів)
         val iframes = mainDocument.select("iframe").mapNotNull { it.attr("src").ifBlank { null } }
 
         for (iframeSrc in iframes) {
@@ -79,19 +82,23 @@ class LiveballProvider : MainAPI() {
             try {
                 val iframeResponse = app.get(
                     iframeUrl,
-                    headers = mapOf("Referer" to "$mainUrl/")
+                    headers = mapOf(
+                        "Referer" to "$mainUrl/",
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36"
+                    )
                 )
                 val iframeHtml = iframeResponse.text
                 val iframeDoc = iframeResponse.document
 
-                // Шукаємо у першому iframe
-                val match = universalM3u8Regex.find(iframeHtml)
-                if (match != null) {
-                    addLink(match.value, callback)
+                var streamUrl = m3u8Regex.find(iframeHtml)?.value
+                    ?: fileJsRegex.find(iframeHtml)?.groupValues?.get(1)
+
+                if (streamUrl != null) {
+                    addLink(streamUrl, callback)
                     return true
                 }
 
-                // Перевірка вкладених iframe (другий рівень)
+                // Перевіряємо вкладені iframe (другий рівень)
                 val nestedIframes = iframeDoc.select("iframe").mapNotNull { it.attr("src").ifBlank { null } }
                 for (nestedSrc in nestedIframes) {
                     val nestedUrl = fixUrlNull(nestedSrc) ?: continue
@@ -101,9 +108,11 @@ class LiveballProvider : MainAPI() {
                             headers = mapOf("Referer" to iframeUrl)
                         ).text
 
-                        val nestedMatch = universalM3u8Regex.find(nestedHtml)
-                        if (nestedMatch != null) {
-                            addLink(nestedMatch.value, callback)
+                        val nestedStream = m3u8Regex.find(nestedHtml)?.value 
+                            ?: fileJsRegex.find(nestedHtml)?.groupValues?.get(1)
+
+                        if (nestedStream != null) {
+                            addLink(nestedStream, callback)
                             return true
                         }
                     } catch (e: Exception) {
@@ -118,7 +127,6 @@ class LiveballProvider : MainAPI() {
         return false
     }
 
-    // Додано suspend для сумісності з новим SDK
     private suspend fun addLink(streamUrl: String, callback: (ExtractorLink) -> Unit) {
         callback(
             newExtractorLink(
