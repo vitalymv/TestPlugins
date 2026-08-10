@@ -64,59 +64,65 @@ class LiveballProvider : MainAPI() {
         val fileRegex = """file\s*:\s*["']([^"']+)["']""".toRegex()
         val srcRegex = """src\s*:\s*["']([^"']+)["']""".toRegex()
 
-        fun extractAndAdd(text: String): Boolean {
-            val directStream = m3u8Regex.find(text)?.value
-            if (directStream != null) {
-                callback(
-                    newExtractorLink(
-                        source = "Liveball",
-                        name = "Liveball Stream",
-                        url = directStream,
-                        type = ExtractorLinkType.M3U8
-                    ) {
-                        this.referer = "$mainUrl/"
-                        this.quality = Qualities.Unknown.value
-                        this.headers = mapOf(
+        // 1. Перевіряємо головну сторінку
+        var streamUrl = m3u8Regex.find(mainHtml)?.value
+        
+        // 2. Якщо не знайшли, проходимо по всіх iframe
+        if (streamUrl == null) {
+            val iframes = mainDocument.select("iframe").mapNotNull { 
+                val src = it.attr("src").ifBlank { it.attr("data-src") }
+                if (src.isNotBlank()) fixUrl(src) else null
+            }
+
+            for (iframeUrl in iframes) {
+                try {
+                    val iframeResponse = app.get(
+                        iframeUrl,
+                        headers = mapOf(
+                            "Referer" to "$mainUrl/",
                             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36"
                         )
+                    )
+                    val iframeHtml = iframeResponse.text
+
+                    val directInIframe = m3u8Regex.find(iframeHtml)?.value
+                    if (directInIframe != null) {
+                        streamUrl = directInIframe
+                        break
                     }
-                )
-                return true
+
+                    val match = fileRegex.find(iframeHtml) ?: srcRegex.find(iframeHtml)
+                    if (match != null) {
+                        val candidate = match.groupValues[1]
+                        val matchInCandidate = m3u8Regex.find(candidate)?.value
+                        if (matchInCandidate != null) {
+                            streamUrl = matchInCandidate
+                            break
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Пропускаємо помилки
+                }
             }
-            return false
         }
 
-        // 1. Пошук прямо на головній сторінці
-        if (extractAndAdd(mainHtml)) return true
-
-        // 2. Отримання та перевірка всіх iframe на сторінці
-        val iframes = mainDocument.select("iframe").mapNotNull { 
-            val src = it.attr("src").ifBlank { it.attr("data-src") }
-            if (src.isNotBlank()) fixUrl(src) else null
-        }
-
-        for (iframeUrl in iframes) {
-            try {
-                val iframeResponse = app.get(
-                    iframeUrl,
-                    headers = mapOf(
-                        "Referer" to "$mainUrl/",
+        // Якщо знайшли посилання — віддаємо плеєру
+        if (streamUrl != null) {
+            callback(
+                newExtractorLink(
+                    source = "Liveball",
+                    name = "Liveball Stream",
+                    url = streamUrl,
+                    type = ExtractorLinkType.M3U8
+                ) {
+                    this.referer = "$mainUrl/"
+                    this.quality = Qualities.Unknown.value
+                    this.headers = mapOf(
                         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36"
                     )
-                )
-                val iframeHtml = iframeResponse.text
-
-                if (extractAndAdd(iframeHtml)) return true
-
-                // Пошук зашифрованих або відносних посилань у JS-пасивних параметрах file/src
-                val match = fileRegex.find(iframeHtml) ?: srcRegex.find(iframeHtml)
-                if (match != null) {
-                    val streamCandidate = match.groupValues[1]
-                    if (extractAndAdd(streamCandidate)) return true
                 }
-            } catch (e: Exception) {
-                // Пропускаємо недоступні фрейми
-            }
+            )
+            return true
         }
 
         return false
