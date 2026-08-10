@@ -56,46 +56,83 @@ class LiveballProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val mainDocument = app.get(data).document
-        val iframes = mainDocument.select("iframe").map { it.attr("src") }
+        val mainResponse = app.get(data)
+        val mainDocument = mainResponse.document
+        val mainHtml = mainResponse.text
+
+        // Універсальна регулярка для будь-яких m3u8 посилань
+        val universalM3u8Regex = """https?://[^\s"'<>]+?\.m3u8(?:\?[^\s"'<>]*)?""".toRegex()
+
+        // 1. Спочатку шукаємо m3u8 прямо у вихідному коді сторінки матчу
+        val directMatch = universalM3u8Regex.find(mainHtml)
+        if (directMatch != null) {
+            addLink(directMatch.value, callback)
+            return true
+        }
+
+        // 2. Якщо прямого посилання немає — проходимо по всіх iframe (зокрема вкладених)
+        val iframes = mainDocument.select("iframe").mapNotNull { it.attr("src").ifBlank { null } }
 
         for (iframeSrc in iframes) {
-            if (iframeSrc.isBlank()) continue
             val iframeUrl = fixUrl(iframeSrc)
 
             try {
-                val iframeHtml = app.get(
-                    iframeUrl, 
+                val iframeResponse = app.get(
+                    iframeUrl,
                     headers = mapOf("Referer" to "$mainUrl/")
-                ).text
+                )
+                val iframeHtml = iframeResponse.text
+                val iframeDoc = iframeResponse.document
 
-                val m3u8Regex = """https?://[^\s"'<>]+/hls/[^\s"'<>]+chunks\.m3u8\?[^\s"'<>]+""".toRegex()
-                val match = m3u8Regex.find(iframeHtml)
-
+                // Шукаємо m3u8 у першому iframe
+                val match = universalM3u8Regex.find(iframeHtml)
                 if (match != null) {
-                    val streamUrl = match.value
-
-                    callback(
-                        newExtractorLink(
-                            source = "Liveball CDN",
-                            name = "Liveball HLS",
-                            url = streamUrl,
-                            type = ExtractorLinkType.M3U8
-                        ) {
-                            this.referer = "$mainUrl/"
-                            this.quality = Qualities.Unknown.value
-                            this.headers = mapOf(
-                                "Origin" to "http://liveball.sx",
-                                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36"
-                            )
-                        }
-                    )
+                    addLink(match.value, callback)
                     return true
                 }
+
+                // Перевіряємо вкладені iframe (другий рівень / double iframe)
+                val nestedIframes = iframeDoc.select("iframe").mapNotNull { it.attr("src").ifBlank { null } }
+                for (nestedSrc in nestedIframes) {
+                    val nestedUrl = fixUrlNull(nestedSrc, iframeUrl) ?: continue
+                    try {
+                        val nestedHtml = app.get(
+                            nestedUrl,
+                            headers = mapOf("Referer" to iframeUrl)
+                        ).text
+
+                        val nestedMatch = universalM3u8Regex.find(nestedHtml)
+                        if (nestedMatch != null) {
+                            addLink(nestedMatch.value, callback)
+                            return true
+                        }
+                    } catch (e: Exception) {
+                        // Ігноруємо помилки окремих суб-iframe
+                    }
+                }
+
             } catch (e: Exception) {
                 // Ігноруємо помилки
             }
         }
         return false
+    }
+
+    private fun addLink(streamUrl: String, callback: (ExtractorLink) -> Unit) {
+        callback(
+            newExtractorLink(
+                source = "Liveball CDN",
+                name = "Liveball HLS",
+                url = streamUrl,
+                type = ExtractorLinkType.M3U8
+            ) {
+                this.referer = "$mainUrl/"
+                this.quality = Qualities.Unknown.value
+                this.headers = mapOf(
+                    "Origin" to mainUrl,
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36"
+                )
+            }
+        )
     }
 }
