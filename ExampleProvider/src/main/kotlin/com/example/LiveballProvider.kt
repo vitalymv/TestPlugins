@@ -4,7 +4,7 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
 
-@CloudstreamPlugin
+@CloudStreamPlugin
 class LiveballProvider : MainAPI() {
     override var mainUrl = "https://liveball.sx"
     override var name = "Liveball"
@@ -19,8 +19,8 @@ class LiveballProvider : MainAPI() {
         }.distinctBy { it.url }
 
         return newHomePageResponse(
-            listOf(HomePageList("Прямі трансляції", matches)),
-            hasMore = false
+            HomePageList("Прямі трансляції", matches),
+            hasNext = false
         )
     }
 
@@ -37,8 +37,8 @@ class LiveballProvider : MainAPI() {
         val document = app.get(url).document
         val title = document.select("h1").text().ifEmpty { "Матч Liveball" }
 
-        return newLiveLoadResponse(title, url, TvType.Live, url) {
-            this.plot = "Пряма трансляція події з Liveball"
+        return newLiveStreamLoadResponse(title, url, TvType.Live, url) {
+            this.plotd = "Пряма трансляція події з Liveball"
         }
     }
 
@@ -68,18 +68,19 @@ class LiveballProvider : MainAPI() {
                     val streamUrl = match.value
 
                     callback(
-                        ExtractorLink(
+                        newExtractorLink(
                             source = "Liveball CDN",
                             name = "Liveball HLS",
                             url = streamUrl,
-                            referer = "$mainUrl/",
-                            quality = 0,
-                            isM3u8 = true,
-                            headers = mapOf(
+                            type = ExtractorLinkType.M3U8
+                        ) {
+                            this.referer = "$mainUrl/"
+                            this.quality = Qualities.Unknown.value
+                            this.headers = mapOf(
                                 "Origin" to "http://liveball.sx",
                                 "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36"
                             )
-                        )
+                        }
                     )
                     return true
                 }
