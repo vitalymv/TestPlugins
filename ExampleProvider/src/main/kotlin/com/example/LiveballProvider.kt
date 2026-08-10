@@ -58,90 +58,51 @@ class LiveballProvider : MainAPI() {
     ): Boolean {
         val mainResponse = app.get(data)
         val mainDocument = mainResponse.document
-        val mainHtml = mainResponse.text
+        val iframes = mainDocument.select("iframe").mapNotNull { it.attr("src").ifBlank { null } }
 
-        // Універсальні регулярки для m3u8 та JS-змінних плеєра (file: "...", source: "...")
+        // Посилання для перевірки WebView (спочатку iframe, якщо є, або сама сторінка)
+        val targetUrl = iframes.firstOrNull()?.let { fixUrl(it) } ?: data
         val m3u8Regex = """https?://[^\s"'<>]+?\.m3u8(?:\?[^\s"'<>]*)?""".toRegex()
-        val fileJsRegex = """(?:file|source)\s*:\s*["']([^"']+\.m3u8[^"']*)["']""".toRegex()
 
-        // 1. Шукаємо прямо у коді сторінки матчу
-        val directMatch = m3u8Regex.find(mainHtml)?.value 
-            ?: fileJsRegex.find(mainHtml)?.groupValues?.get(1)
+        var foundUrl: String? = null
 
-        if (directMatch != null) {
-            addLink(directMatch, callback)
+        // Використовуємо WebViewResolver для перехоплення мережевого запиту .m3u8
+        val webView = WebViewResolver(m3u8Regex)
+        val response = app.get(
+            targetUrl,
+            interceptor = webView,
+            headers = mapOf("Referer" to "$mainUrl/")
+        )
+
+        // Перевіряємо перехоплене посилання з WebView
+        val interceptedUrl = webView.getMatch()
+        if (interceptedUrl != null) {
+            foundUrl = interceptedUrl
+        } else {
+            // Резервний пошук у згенерованому HTML після виконання JS
+            val html = response.text
+            foundUrl = m3u8Regex.find(html)?.value
+        }
+
+        if (foundUrl != null) {
+            callback(
+                newExtractorLink(
+                    source = "Liveball CDN",
+                    name = "Liveball Stream",
+                    url = foundUrl,
+                    type = ExtractorLinkType.M3U8
+                ) {
+                    this.referer = "$mainUrl/"
+                    this.quality = Qualities.Unknown.value
+                    this.headers = mapOf(
+                        "Origin" to mainUrl,
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36"
+                    )
+                }
+            )
             return true
         }
 
-        // 2. Пошук усередині iframe (підтримка вкладених плеєрів)
-        val iframes = mainDocument.select("iframe").mapNotNull { it.attr("src").ifBlank { null } }
-
-        for (iframeSrc in iframes) {
-            val iframeUrl = fixUrl(iframeSrc)
-
-            try {
-                val iframeResponse = app.get(
-                    iframeUrl,
-                    headers = mapOf(
-                        "Referer" to "$mainUrl/",
-                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36"
-                    )
-                )
-                val iframeHtml = iframeResponse.text
-                val iframeDoc = iframeResponse.document
-
-                var streamUrl = m3u8Regex.find(iframeHtml)?.value
-                    ?: fileJsRegex.find(iframeHtml)?.groupValues?.get(1)
-
-                if (streamUrl != null) {
-                    addLink(streamUrl, callback)
-                    return true
-                }
-
-                // Перевіряємо вкладені iframe (другий рівень)
-                val nestedIframes = iframeDoc.select("iframe").mapNotNull { it.attr("src").ifBlank { null } }
-                for (nestedSrc in nestedIframes) {
-                    val nestedUrl = fixUrlNull(nestedSrc) ?: continue
-                    try {
-                        val nestedHtml = app.get(
-                            nestedUrl,
-                            headers = mapOf("Referer" to iframeUrl)
-                        ).text
-
-                        val nestedStream = m3u8Regex.find(nestedHtml)?.value 
-                            ?: fileJsRegex.find(nestedHtml)?.groupValues?.get(1)
-
-                        if (nestedStream != null) {
-                            addLink(nestedStream, callback)
-                            return true
-                        }
-                    } catch (e: Exception) {
-                        // Ігноруємо помилки
-                    }
-                }
-
-            } catch (e: Exception) {
-                // Ігноруємо помилки
-            }
-        }
         return false
-    }
-
-    private suspend fun addLink(streamUrl: String, callback: (ExtractorLink) -> Unit) {
-        callback(
-            newExtractorLink(
-                source = "Liveball CDN",
-                name = "Liveball HLS",
-                url = streamUrl,
-                type = ExtractorLinkType.M3U8
-            ) {
-                this.referer = "$mainUrl/"
-                this.quality = Qualities.Unknown.value
-                this.headers = mapOf(
-                    "Origin" to mainUrl,
-                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36"
-                )
-            }
-        )
     }
 }
