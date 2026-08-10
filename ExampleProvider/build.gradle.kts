@@ -8,7 +8,7 @@ version = 1
 
 cloudstream {
   language = "uk"
-    version = 2
+    version = 5
 }
 
 android {
