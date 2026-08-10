@@ -7,13 +7,7 @@ dependencies {
 version = 1
 
 cloudstream {
-    // Вказуємо назву, яку буде бачити CloudStream
-    name = "Liveball"
-    description = "Прямі трансляції футболу"
-    authors = listOf("vitalymv")
-    language = "uk"
-    
-    // Змінюємо версію на 2, щоб додаток побачив оновлення
+  language = "uk"
     version = 2
 }
 
