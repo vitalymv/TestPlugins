@@ -9,7 +9,7 @@ Template for a [Cloudstream3](https://github.com/recloudstream) plugin repo
  
 ## Getting started with writing your first plugin
 
-This template includes 1 example plugin.
+ This template includes 1 example plugin.
 
 1. Open the root build.gradle.kts, read the comments and replace all the placeholders
 2. Familiarize yourself with the project structure. Most files are commented
