@@ -1,9 +1,7 @@
 {
   "name": "Liveball",
-  "description": "Прямі трансляції матчів Liveball",
+  "pluginClassName": "com.example.LiveballPlugin",
   "authors": ["vitalymv"],
-  "version": 1,
-  "tvTypes": ["Live"],
-  "language": "uk",
-  "iconUrl": "https://liveball.sx/favicon.ico"
+  "description": "Прямі трансляції футболу",
+  "version": 2
 }
