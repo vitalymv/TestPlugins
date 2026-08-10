@@ -60,17 +60,17 @@ class LiveballProvider : MainAPI() {
         val mainDocument = mainResponse.document
         val mainHtml = mainResponse.text
 
-        // Універсальна регулярка для будь-яких m3u8 посилань
+        // Універсальна регулярка для m3u8
         val universalM3u8Regex = """https?://[^\s"'<>]+?\.m3u8(?:\?[^\s"'<>]*)?""".toRegex()
 
-        // 1. Спочатку шукаємо m3u8 прямо у вихідному коді сторінки матчу
+        // 1. Пошук прямо у коді сторінки матчу
         val directMatch = universalM3u8Regex.find(mainHtml)
         if (directMatch != null) {
             addLink(directMatch.value, callback)
             return true
         }
 
-        // 2. Якщо прямого посилання немає — проходимо по всіх iframe (зокрема вкладених)
+        // 2. Пошук у всіх iframe
         val iframes = mainDocument.select("iframe").mapNotNull { it.attr("src").ifBlank { null } }
 
         for (iframeSrc in iframes) {
@@ -84,17 +84,17 @@ class LiveballProvider : MainAPI() {
                 val iframeHtml = iframeResponse.text
                 val iframeDoc = iframeResponse.document
 
-                // Шукаємо m3u8 у першому iframe
+                // Шукаємо у першому iframe
                 val match = universalM3u8Regex.find(iframeHtml)
                 if (match != null) {
                     addLink(match.value, callback)
                     return true
                 }
 
-                // Перевіряємо вкладені iframe (другий рівень / double iframe)
+                // Перевірка вкладених iframe (другий рівень)
                 val nestedIframes = iframeDoc.select("iframe").mapNotNull { it.attr("src").ifBlank { null } }
                 for (nestedSrc in nestedIframes) {
-                    val nestedUrl = fixUrlNull(nestedSrc, iframeUrl) ?: continue
+                    val nestedUrl = fixUrlNull(nestedSrc) ?: continue
                     try {
                         val nestedHtml = app.get(
                             nestedUrl,
@@ -107,7 +107,7 @@ class LiveballProvider : MainAPI() {
                             return true
                         }
                     } catch (e: Exception) {
-                        // Ігноруємо помилки окремих суб-iframe
+                        // Ігноруємо помилки
                     }
                 }
 
@@ -118,7 +118,8 @@ class LiveballProvider : MainAPI() {
         return false
     }
 
-    private fun addLink(streamUrl: String, callback: (ExtractorLink) -> Unit) {
+    // Додано suspend для сумісності з новим SDK
+    private suspend fun addLink(streamUrl: String, callback: (ExtractorLink) -> Unit) {
         callback(
             newExtractorLink(
                 source = "Liveball CDN",
